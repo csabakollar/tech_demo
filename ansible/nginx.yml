@@ -1,0 +1,12 @@
+---
+  - name: installing nginx
+    hosts: tag_role_loadbalance
+    gather_facts: true
+    become: yes
+    vars:
+      docker_image: csabakollar/nginx:latest
+      app1: "{{app1}}"
+      app2: "{{app2}}"
+
+    roles:
+      - nginx

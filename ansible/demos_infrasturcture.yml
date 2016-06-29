@@ -1,0 +1,15 @@
+---
+  - name: demos infrastructure
+    hosts: localhost
+    connection: local
+    gather_facts: false
+    vars:
+      infra: techdemo1
+      region: eu-west-1
+      vpc_name: demos
+      vpc_secondOctet: 0
+      vpc_size: 16
+      thirdOctet: 0
+
+    roles:
+      - aws_create_infra

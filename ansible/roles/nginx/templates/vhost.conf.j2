@@ -1,0 +1,24 @@
+upstream app {
+  server {{app1}};
+  server {{app2}};
+}
+
+server {
+  listen 80;
+  ## Only allow these request methods ##
+  if ($request_method !~ ^(GET|HEAD|POST)$ ) {
+    return 444;
+  }
+  ## Block download agents ##
+  if ($http_user_agent ~* LWP::Simple|BBBike|wget) {
+    return 403;
+  }
+  ## Block some robots ##
+  if ($http_user_agent ~* msnbot|scrapbot) {
+    return 403;
+  }
+  location / {
+    proxy_pass http://app;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+}

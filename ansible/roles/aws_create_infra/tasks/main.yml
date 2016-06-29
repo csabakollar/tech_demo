@@ -1,0 +1,125 @@
+---
+########################################################################################
+#VPC
+########################################################################################
+  - name: "checking {{ vpc_name }} if exists"
+    ec2_vpc_net_facts:
+      region: "{{ region }}"
+      filters:
+        "tag:Name": "{{ vpc_name }}"
+    register: vpc
+
+  - name: "creating {{ vpc_name }}"
+    ec2_vpc:
+      state: present
+      cidr_block: 10.{{ vpc_secondOctet }}.{{ thirdOctet }}.0/{{ vpc_size }}
+      resource_tags: { "Name":"{{ vpc_name }}" }
+      region: "{{ region }}"
+      dns_hostnames: yes
+      dns_support: yes
+      internet_gateway: yes
+    register: vpc
+    when: vpc.vpcs[0] is undefined
+
+  - name: "checking {{ vpc_name }} if exists"
+    ec2_vpc_net_facts:
+      region: "{{ region }}"
+      filters:
+        "tag:Name": "{{ vpc_name }}"
+    register: vpc
+
+########################################################################################
+#SUBNETS
+########################################################################################
+  - name: "creating subnet {{ vpc_name }}-{{ infra }}-fea"
+    ec2_vpc_subnet:
+      state: present
+      vpc_id: "{{ vpc.vpcs[0].id }}"
+      cidr: "10.{{ vpc_secondOctet }}.{{ thirdOctet }}.0/26"
+      region: "{{ region }}"
+      az: "{{ region }}a"
+      resource_tags: { "infra":"{{ infra }}", "Name":"{{ vpc_name }}-{{ infra }}-fea" }
+    register: fea
+
+  - name: "creating subnet {{ vpc_name }}-{{ infra }}-feb"
+    ec2_vpc_subnet:
+      state: present
+      vpc_id: "{{ vpc.vpcs[0].id }}"
+      cidr: "10.{{ vpc_secondOctet }}.{{ thirdOctet }}.64/26"
+      region: "{{ region }}"
+      az: "{{ region }}b"
+      resource_tags: { "infra":"{{ infra }}", "Name":"{{ vpc_name }}-{{ infra }}-feb" }
+    register: feb
+
+########################################################################################
+# Security Groups
+########################################################################################
+  #ssh-sg
+  - name: "creating security group {{ vpc_name }}-{{ infra }}-ssh"
+    ec2_group:
+      name: "{{ vpc_name }}-{{ infra }}-ssh"
+      description: "{{ vpc_name }}-{{ infra }} - Allow SSH from anywhere"
+      vpc_id: "{{ vpc.vpcs[0].id }}"
+      region: "{{ region }}"
+      rules:
+        - proto: tcp
+          from_port: 22
+          to_port: 22
+          cidr_ip: 0.0.0.0/0
+    register: securitygroup
+
+  - name: "tagging security group"
+    local_action:
+      module: ec2_tag
+      resource: "{{ securitygroup.group_id }}"
+      region: "{{ region }}"
+      state: present
+      tags:
+        infra: "{{ infra }}"
+        Name: "{{ vpc_name }}-{{ infra }}-ssh"
+
+  #web sg
+  - name: "creating security group {{ vpc_name }}-{{ infra }}-web"
+    ec2_group:
+      name: "{{ vpc_name }}-{{ infra }}-web"
+      description: "{{ vpc_name }}-{{ infra }} - Allow instances to be reached via HTTP and HTTPS"
+      vpc_id: "{{ vpc.vpcs[0].id }}"
+      region: "{{ region }}"
+      rules:
+        - proto: tcp
+          from_port: 80
+          to_port: 80
+          cidr_ip: "0.0.0.0/0"
+        - proto: tcp
+          from_port: 443
+          to_port: 443
+          cidr_ip: "0.0.0.0/0"
+    register: securitygroup_web
+
+  - name: "tagging security group"
+    local_action:
+      module: ec2_tag
+      resource: "{{ securitygroup_web.group_id }}"
+      region: "{{ region }}"
+      state: present
+      tags:
+        infra: "{{ infra }}"
+        Name: "{{ vpc_name }}-{{ infra }}-web"
+
+########################################################################################
+# Route Tables
+########################################################################################
+#giving internet access to FrontEnd servers
+  - name: "creating routing table {{ vpc_name }}-{{ infra }}-fe-rt"
+    ec2_vpc_route_table:
+      vpc_id: "{{ vpc.vpcs[0].id }}"
+      state: present
+      region: "{{ region }}"
+      subnets:
+        - "{{ fea.subnet.id }}"
+        - "{{ feb.subnet.id }}"
+      routes:
+        - dest: 0.0.0.0/0
+          gateway_id: igw
+      resource_tags: { "infra":"{{ infra }}", "Name":"{{ vpc_name }}-{{ infra }}-fe-rt" }
+    register: fe-rt

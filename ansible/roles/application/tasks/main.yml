@@ -1,0 +1,26 @@
+---
+  - name: adding docker repo's gpg key
+    rpm_key: state=present key=https://yum.dockerproject.org/gpg
+
+  - name: copying docker repo config to /etc/yum.repos.d
+    copy: src=docker.repo dest=/etc/yum.repos.d
+
+  - name: installing docker-engine
+    yum: name={{ item }} state=present
+    with_items:
+      - docker-engine
+      - docker-python
+
+  - name: enabling and starting docker.service
+    service: name=docker state=started enabled=yes
+
+  - name: creating application container
+    docker:
+      name: app
+      hostname: app-on-{{ansible_hostname}}
+      image: csabakollar/techdemo_app:latest
+      state: reloaded
+      memory_limit: 32MB
+      ports:
+        - 80:8484
+      restart_policy: always

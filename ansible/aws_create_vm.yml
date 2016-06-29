@@ -1,0 +1,36 @@
+---
+  - name: Creating AWS VM
+    hosts: localhost
+    gather_facts: false
+    connection: local
+    tasks:
+      - name: "Creating {{ hostname }} with {{ keypair }} key"
+        ec2:
+          key_name: "{{ keypair }}"
+          instance_type: "{{ instancetype }}"
+          image: "{{ ami }}"
+          region: "{{ region }}"
+          wait: yes
+          volumes:
+            - device_name: /dev/sda1
+              volume_size: "{{ volumesize }}"
+              device_type: "{{ volumetype }}"
+              delete_on_termination: true
+          instance_tags:
+            Name: "{{ vmname }}"
+            infra: "{{ infra }}"
+            role: "{{ role }}"
+          monitoring: no
+          termination_protection: yes
+          vpc_subnet_id: "{{ subnet }}"
+          assign_public_ip: "{{ public_ip }}"
+        with_items:
+          - hostname: "{{ hostname }}"
+            fqdn: "{{ vmname }}"
+        register: vm
+
+      - name: "Assigning fixed ip to {{ hostname }}"
+        ec2_eip:
+          region: "{{ region }}"
+          device_id: "{{ vm.results[0].instance_ids[0] }}"
+        when: "{{ fixed_ip }}"
